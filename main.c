@@ -203,6 +203,140 @@ static int input_utf8_encode(int cp, char out[4])
     }
 }
 
+// Map a raylib mouse button to a GhosttyMouseButton.
+static GhosttyMouseButton raylib_mouse_to_ghostty(int rl_button)
+{
+    switch (rl_button) {
+    case MOUSE_BUTTON_LEFT:    return GHOSTTY_MOUSE_BUTTON_LEFT;
+    case MOUSE_BUTTON_RIGHT:   return GHOSTTY_MOUSE_BUTTON_RIGHT;
+    case MOUSE_BUTTON_MIDDLE:  return GHOSTTY_MOUSE_BUTTON_MIDDLE;
+    case MOUSE_BUTTON_SIDE:    return GHOSTTY_MOUSE_BUTTON_FOUR;
+    case MOUSE_BUTTON_EXTRA:   return GHOSTTY_MOUSE_BUTTON_FIVE;
+    case MOUSE_BUTTON_FORWARD: return GHOSTTY_MOUSE_BUTTON_SIX;
+    case MOUSE_BUTTON_BACK:    return GHOSTTY_MOUSE_BUTTON_SEVEN;
+    default:                   return GHOSTTY_MOUSE_BUTTON_UNKNOWN;
+    }
+}
+
+// Encode a mouse event and write the resulting escape sequence to the pty.
+// If the encoder produces no output (e.g. tracking is disabled), this is
+// a no-op.
+static void mouse_encode_and_write(int pty_fd, GhosttyMouseEncoder encoder,
+                                   GhosttyMouseEvent event)
+{
+    char buf[128];
+    size_t written = 0;
+    GhosttyResult res = ghostty_mouse_encoder_encode(
+        encoder, event, buf, sizeof(buf), &written);
+    if (res == GHOSTTY_SUCCESS && written > 0)
+        write(pty_fd, buf, written);
+}
+
+// Poll raylib for mouse events and use the libghostty mouse encoder
+// to produce the correct VT escape sequences, which are then written
+// to the pty.  The encoder handles tracking mode (X10, normal, button,
+// any-event) and output format (X10, UTF8, SGR, URxvt, SGR-Pixels)
+// based on what the terminal application has requested.
+static void handle_mouse(int pty_fd, GhosttyMouseEncoder encoder,
+                         GhosttyMouseEvent event, GhosttyTerminal terminal,
+                         int cell_width, int cell_height, int pad)
+{
+    // Sync encoder tracking mode and format from terminal state so
+    // mode changes (e.g. applications enabling SGR mouse reporting)
+    // are honoured automatically.
+    ghostty_mouse_encoder_setopt_from_terminal(encoder, terminal);
+
+    // Provide the encoder with the current terminal geometry so it
+    // can convert pixel positions to cell coordinates.
+    int scr_w = GetScreenWidth();
+    int scr_h = GetScreenHeight();
+    GhosttyMouseEncoderSize enc_size = {
+        .size          = sizeof(GhosttyMouseEncoderSize),
+        .screen_width  = (uint32_t)scr_w,
+        .screen_height = (uint32_t)scr_h,
+        .cell_width    = (uint32_t)cell_width,
+        .cell_height   = (uint32_t)cell_height,
+        .padding_top   = (uint32_t)pad,
+        .padding_bottom = (uint32_t)pad,
+        .padding_left  = (uint32_t)pad,
+        .padding_right = (uint32_t)pad,
+    };
+    ghostty_mouse_encoder_setopt(encoder,
+        GHOSTTY_MOUSE_ENCODER_OPT_SIZE, &enc_size);
+
+    // Track whether any button is currently held — the encoder uses
+    // this to distinguish drags from plain motion.
+    bool any_pressed = IsMouseButtonDown(MOUSE_BUTTON_LEFT)
+                    || IsMouseButtonDown(MOUSE_BUTTON_RIGHT)
+                    || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
+    ghostty_mouse_encoder_setopt(encoder,
+        GHOSTTY_MOUSE_ENCODER_OPT_ANY_BUTTON_PRESSED, &any_pressed);
+
+    // Enable motion deduplication so the encoder suppresses redundant
+    // motion events within the same cell.
+    bool track_cell = true;
+    ghostty_mouse_encoder_setopt(encoder,
+        GHOSTTY_MOUSE_ENCODER_OPT_TRACK_LAST_CELL, &track_cell);
+
+    GhosttyMods mods = get_ghostty_mods();
+    Vector2 pos = GetMousePosition();
+    ghostty_mouse_event_set_mods(event, mods);
+    ghostty_mouse_event_set_position(event,
+        (GhosttyMousePosition){ .x = pos.x, .y = pos.y });
+
+    // Check each mouse button for press/release events.
+    static const int buttons[] = {
+        MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE,
+        MOUSE_BUTTON_SIDE, MOUSE_BUTTON_EXTRA, MOUSE_BUTTON_FORWARD,
+        MOUSE_BUTTON_BACK,
+    };
+    for (size_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++) {
+        int rl_btn = buttons[i];
+        GhosttyMouseButton gbtn = raylib_mouse_to_ghostty(rl_btn);
+        if (gbtn == GHOSTTY_MOUSE_BUTTON_UNKNOWN)
+            continue;
+
+        if (IsMouseButtonPressed(rl_btn)) {
+            ghostty_mouse_event_set_action(event, GHOSTTY_MOUSE_ACTION_PRESS);
+            ghostty_mouse_event_set_button(event, gbtn);
+            mouse_encode_and_write(pty_fd, encoder, event);
+        } else if (IsMouseButtonReleased(rl_btn)) {
+            ghostty_mouse_event_set_action(event, GHOSTTY_MOUSE_ACTION_RELEASE);
+            ghostty_mouse_event_set_button(event, gbtn);
+            mouse_encode_and_write(pty_fd, encoder, event);
+        }
+    }
+
+    // Mouse motion — send a motion event with whatever button is held
+    // (or no button for pure motion in any-event tracking mode).
+    Vector2 delta = GetMouseDelta();
+    if (delta.x != 0.0f || delta.y != 0.0f) {
+        ghostty_mouse_event_set_action(event, GHOSTTY_MOUSE_ACTION_MOTION);
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+            ghostty_mouse_event_set_button(event, GHOSTTY_MOUSE_BUTTON_LEFT);
+        else if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
+            ghostty_mouse_event_set_button(event, GHOSTTY_MOUSE_BUTTON_RIGHT);
+        else if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE))
+            ghostty_mouse_event_set_button(event, GHOSTTY_MOUSE_BUTTON_MIDDLE);
+        else
+            ghostty_mouse_event_clear_button(event);
+        mouse_encode_and_write(pty_fd, encoder, event);
+    }
+
+    // Scroll wheel — encoded as press+release of button 4 (up) or 5 (down).
+    float wheel = GetMouseWheelMove();
+    if (wheel != 0.0f) {
+        GhosttyMouseButton scroll_btn = (wheel > 0.0f)
+            ? GHOSTTY_MOUSE_BUTTON_FOUR
+            : GHOSTTY_MOUSE_BUTTON_FIVE;
+        ghostty_mouse_event_set_button(event, scroll_btn);
+        ghostty_mouse_event_set_action(event, GHOSTTY_MOUSE_ACTION_PRESS);
+        mouse_encode_and_write(pty_fd, encoder, event);
+        ghostty_mouse_event_set_action(event, GHOSTTY_MOUSE_ACTION_RELEASE);
+        mouse_encode_and_write(pty_fd, encoder, event);
+    }
+}
+
 // Poll raylib for keyboard events and use the libghostty key encoder
 // to produce the correct VT escape sequences, which are then written
 // to the pty.  The encoder respects terminal modes (cursor key
@@ -598,6 +732,18 @@ int main(void)
     err = ghostty_key_event_new(NULL, &key_event);
     assert(err == GHOSTTY_SUCCESS);
 
+    // Create the mouse encoder and a reusable mouse event for input
+    // handling.  The encoder translates mouse events into the correct
+    // VT escape sequences, respecting terminal modes like SGR mouse
+    // reporting and tracking mode (normal, button, any-event).
+    GhosttyMouseEncoder mouse_encoder = NULL;
+    err = ghostty_mouse_encoder_new(NULL, &mouse_encoder);
+    assert(err == GHOSTTY_SUCCESS);
+
+    GhosttyMouseEvent mouse_event = NULL;
+    err = ghostty_mouse_event_new(NULL, &mouse_event);
+    assert(err == GHOSTTY_SUCCESS);
+
     // Create the render state and its reusable iterator/cells handles once
     // up front.  These are updated each frame rather than recreated.
     GhosttyRenderState render_state = NULL;
@@ -646,6 +792,10 @@ int main(void)
         // Forward keyboard input to the shell.
         handle_input(pty_fd, key_encoder, key_event, terminal);
 
+        // Forward mouse input to the shell.
+        handle_mouse(pty_fd, mouse_encoder, mouse_event, terminal,
+                     cell_width, cell_height, pad);
+
         // Snapshot the terminal state into our render state.  This is the
         // only point where we need access to the terminal; after this the
         // render state owns everything we need to draw the frame.
@@ -670,6 +820,8 @@ int main(void)
     close(pty_fd);
     kill(child, SIGHUP);    // signal the child shell to exit
     waitpid(child, NULL, 0); // reap the child to avoid a zombie
+    ghostty_mouse_event_free(mouse_event);
+    ghostty_mouse_encoder_free(mouse_encoder);
     ghostty_key_event_free(key_event);
     ghostty_key_encoder_free(key_encoder);
     ghostty_render_state_row_cells_free(row_cells);
