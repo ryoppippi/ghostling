@@ -762,6 +762,9 @@ int main(void)
     int prev_width = scr_w;
     int prev_height = scr_h;
 
+    // Track focus state so we only send focus events on transitions.
+    bool prev_focused = true;
+
     // Each frame: handle resize → read pty → process input → render.
     while (!WindowShouldClose()) {
         // Recalculate grid dimensions when the window is resized.
@@ -784,6 +787,22 @@ int main(void)
                 prev_width = w;
                 prev_height = h;
             }
+        }
+
+        // Send focus in/out events when the window focus state changes.
+        // Applications that enable focus reporting (mode 1004) will
+        // receive CSI I / CSI O sequences.
+        bool focused = IsWindowFocused();
+        if (focused != prev_focused) {
+            GhosttyFocusEvent focus_event = focused
+                ? GHOSTTY_FOCUS_GAINED : GHOSTTY_FOCUS_LOST;
+            char focus_buf[8];
+            size_t focus_written = 0;
+            GhosttyResult focus_res = ghostty_focus_encode(
+                focus_event, focus_buf, sizeof(focus_buf), &focus_written);
+            if (focus_res == GHOSTTY_SUCCESS && focus_written > 0)
+                write(pty_fd, focus_buf, focus_written);
+            prev_focused = focused;
         }
 
         // Drain any pending output from the shell and update terminal state.
