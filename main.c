@@ -533,12 +533,16 @@ static int utf8_encode(uint32_t cp, char out[4])
 // cell_width and cell_height are the measured dimensions of a single
 // monospace glyph at the current font size, in screen (logical) pixels.
 // font_size is the logical font size (before DPI scaling).
+//
+// If scrollbar is non-NULL, a scrollbar indicator is drawn on the right
+// edge of the window.
 static void render_terminal(GhosttyRenderState render_state,
                             GhosttyRenderStateRowIterator row_iter,
                             GhosttyRenderStateRowCells cells,
                             Font font,
                             int cell_width, int cell_height,
-                            int font_size)
+                            int font_size,
+                            const GhosttyTerminalScrollbar *scrollbar)
 {
     // Grab colors (palette, default fg/bg) from the render state so we
     // can resolve palette-indexed cell colors.
@@ -674,6 +678,33 @@ static void render_terminal(GhosttyRenderState render_state,
         int cur_x = pad + cx * cell_width;
         int cur_y = pad + cy * cell_height;
         DrawRectangle(cur_x, cur_y, cell_width, cell_height, (Color){ cur_rgb.r, cur_rgb.g, cur_rgb.b, 128 });
+    }
+
+    // Draw the scrollbar when there is scrollback content to scroll through.
+    if (scrollbar && scrollbar->total > scrollbar->len) {
+        int scr_w = GetScreenWidth();
+        int scr_h = GetScreenHeight();
+
+        // Scrollbar track spans the full window height; the thumb
+        // is proportional to the visible fraction of the total content.
+        const int bar_width = 6;
+        const int bar_margin = 2;
+        int bar_x = scr_w - bar_width - bar_margin;
+
+        double visible_frac = (double)scrollbar->len / (double)scrollbar->total;
+        int thumb_height = (int)(scr_h * visible_frac);
+        if (thumb_height < 10) thumb_height = 10;
+
+        // Offset: 0 = scrolled all the way up (oldest), total-len =
+        // bottom (most recent).  Map to y so bottom-of-viewport aligns
+        // with the bottom of the track.
+        double scroll_frac = (scrollbar->total > scrollbar->len)
+            ? (double)scrollbar->offset / (double)(scrollbar->total - scrollbar->len)
+            : 1.0;
+        int thumb_y = (int)(scroll_frac * (scr_h - thumb_height));
+
+        DrawRectangle(bar_x, thumb_y, bar_width, thumb_height,
+                      (Color){ 200, 200, 200, 128 });
     }
 
     // Reset global dirty state so the next update reports changes accurately.
@@ -859,11 +890,20 @@ int main(void)
         ghostty_render_state_colors_get(render_state, &bg_colors);
         Color win_bg = { bg_colors.background.r, bg_colors.background.g, bg_colors.background.b, 255 };
 
+        // Query scrollbar state from the terminal so we can draw a
+        // scrollbar indicator when the mouse hovers near the right edge.
+        GhosttyTerminalScrollbar scrollbar = {0};
+        GhosttyTerminalScrollbar *scrollbar_ptr = NULL;
+        if (ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_SCROLLBAR,
+                                 &scrollbar) == GHOSTTY_SUCCESS)
+            scrollbar_ptr = &scrollbar;
+
         // Draw the current terminal screen.
         BeginDrawing();
         ClearBackground(win_bg);
         render_terminal(render_state, row_iter, row_cells, mono_font,
-                        cell_width, cell_height, font_size);
+                        cell_width, cell_height, font_size,
+                        scrollbar_ptr);
         EndDrawing();
     }
 
