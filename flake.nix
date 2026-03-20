@@ -20,6 +20,15 @@
             cmake
             ninja
           ];
+
+          # Unset Nix Darwin SDK env vars and remove the xcbuild
+          # xcrun wrapper so Zig's SDK detection uses the real
+          # system xcrun/xcode-select.
+          shellHook = ''
+            unset SDKROOT
+            unset DEVELOPER_DIR
+            export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v xcbuild | tr '\n' ':')
+          '';
         };
       }
     );

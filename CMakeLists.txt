@@ -1,14 +1,16 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.19)
 project(ghostling C)
 
-# Generate compile_commands.json
+# Generate compile_commands.json for clangd/IDE support.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Dependencies
+include(FetchContent)
+
+# --- Raylib ------------------------------------------------------------------
+# Use a system-installed raylib if available, otherwise fetch from GitHub.
 set(RAYLIB_VERSION 5.5)
 find_package(raylib ${RAYLIB_VERSION} QUIET)
 if (NOT raylib_FOUND)
-  include(FetchContent)
   FetchContent_Declare(
     raylib
     DOWNLOAD_EXTRACT_TIMESTAMP OFF
@@ -21,11 +23,22 @@ if (NOT raylib_FOUND)
   endif()
 endif()
 
-# Our Project
-add_executable(${PROJECT_NAME} main.c)
-target_link_libraries(${PROJECT_NAME} raylib)
+# --- libghostty-vt -----------------------------------------------------------
+# Virtual terminal emulator library from Ghostty. Requires `zig` on PATH.
+# The Ghostty CMakeLists.txt delegates to `zig build lib-vt` to produce the
+# shared library. See https://ghostty.org/docs/install/build for the
+# required Zig version.
+FetchContent_Declare(ghostty
+  GIT_REPOSITORY https://github.com/ghostty-org/ghostty.git
+  GIT_TAG main
+)
+FetchContent_MakeAvailable(ghostty)
 
-# macOS frameworks
+# --- Our Project -------------------------------------------------------------
+add_executable(${PROJECT_NAME} main.c)
+target_link_libraries(${PROJECT_NAME} raylib ghostty-vt)
+
+# macOS requires these system frameworks for raylib's windowing/input/rendering.
 if (APPLE)
   target_link_libraries(${PROJECT_NAME} "-framework IOKit")
   target_link_libraries(${PROJECT_NAME} "-framework Cocoa")
