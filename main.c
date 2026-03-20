@@ -5,6 +5,10 @@
 #include "raylib.h"
 #include <ghostty/vt.h>
 
+static const unsigned char font_jetbrains_mono[] = {
+    #embed "fonts/JetBrainsMono-Regular.ttf"
+};
+
 int main(void)
 {
     // Create an 80x24 terminal
@@ -25,6 +29,10 @@ int main(void)
     InitWindow(800, 600, "ghostling");
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
+
+    // Load embedded JetBrains Mono font
+    Font mono_font = LoadFontFromMemory(".ttf", font_jetbrains_mono, (int)sizeof(font_jetbrains_mono), 16, NULL, 0);
+    SetTextureFilter(mono_font.texture, TEXTURE_FILTER_BILINEAR);
 
     int prev_width = GetScreenWidth();
     int prev_height = GetScreenHeight();
@@ -67,7 +75,7 @@ int main(void)
                         if (line_len > 0 && line_len < 255) {
                             memcpy(line, line_start, line_len);
                             line[line_len] = '\0';
-                            DrawText(line, 10, y, 16, GREEN);
+                            DrawTextEx(mono_font, line, (Vector2){10, y}, 16, 0, GREEN);
                         }
                         y += 18;
                         line_start = (const char *)&buf[i + 1];
@@ -81,6 +89,7 @@ int main(void)
         EndDrawing();
     }
 
+    UnloadFont(mono_font);
     CloseWindow();
     ghostty_terminal_free(terminal);
     return 0;

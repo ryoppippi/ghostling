@@ -36,6 +36,7 @@ FetchContent_MakeAvailable(ghostty)
 
 # --- Our Project -------------------------------------------------------------
 add_executable(${PROJECT_NAME} main.c)
+target_compile_features(${PROJECT_NAME} PRIVATE c_std_23)
 target_link_libraries(${PROJECT_NAME} raylib ghostty-vt)
 
 # macOS requires these system frameworks for raylib's windowing/input/rendering.

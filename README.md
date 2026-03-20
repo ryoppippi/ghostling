@@ -12,8 +12,8 @@ more functional terminals.
 
 ## Building
 
-Requires CMake 3.11+ and a C compiler. Raylib is fetched automatically
-via CMake's FetchContent if not already installed.
+Requires CMake 3.11+, a C23-capable compiler, and Zig 0.15.x on PATH.
+Raylib is fetched automatically via CMake's FetchContent if not already installed.
 
 ```sh
 cmake -B build -G Ninja
