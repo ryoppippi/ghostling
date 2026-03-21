@@ -912,6 +912,11 @@ int main(void)
     int cell_width  = (int)(glyph_size.x / dpi_scale.x);
     int cell_height = (int)(glyph_size.y / dpi_scale.y);
 
+    // Guard against zero cell dimensions — these would cause division
+    // by zero when computing the terminal grid.
+    if (cell_width < 1) cell_width = 1;
+    if (cell_height < 1) cell_height = 1;
+
     // Small padding from window edges — must match the constant in
     // render_terminal().
     const int pad = 4;
