@@ -796,11 +796,40 @@ static void render_terminal(GhosttyRenderState render_state,
 }
 
 // ---------------------------------------------------------------------------
+// Build info
+// ---------------------------------------------------------------------------
+
+// Log compile-time build info from libghostty-vt so we can quickly tell
+// whether the library was built with SIMD, and in which optimization mode.
+static void log_build_info(void)
+{
+    bool simd = false;
+    ghostty_build_info(GHOSTTY_BUILD_INFO_SIMD, &simd);
+
+    GhosttyOptimizeMode opt = GHOSTTY_OPTIMIZE_DEBUG;
+    ghostty_build_info(GHOSTTY_BUILD_INFO_OPTIMIZE, &opt);
+
+    const char *opt_str;
+    switch (opt) {
+    case GHOSTTY_OPTIMIZE_DEBUG:        opt_str = "Debug";        break;
+    case GHOSTTY_OPTIMIZE_RELEASE_SAFE: opt_str = "ReleaseSafe";  break;
+    case GHOSTTY_OPTIMIZE_RELEASE_SMALL: opt_str = "ReleaseSmall"; break;
+    case GHOSTTY_OPTIMIZE_RELEASE_FAST: opt_str = "ReleaseFast";  break;
+    default:                            opt_str = "Unknown";       break;
+    }
+
+    TraceLog(LOG_INFO, "ghostty-vt: simd:     %s", simd ? "enabled" : "disabled");
+    TraceLog(LOG_INFO, "ghostty-vt: optimize: %s", opt_str);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 int main(void)
 {
+    log_build_info();
+
     // Desired font size in logical (screen) points — the actual texture
     // will be rasterized at font_size * dpi_scale so glyphs stay crisp on
     // HiDPI / Retina displays.
