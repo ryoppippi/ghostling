@@ -131,8 +131,14 @@ static PtyReadResult pty_read(int pty_fd, GhosttyTerminal terminal)
             return PTY_READ_EOF;
         } else {
             // n == -1: distinguish "no data right now" from real errors.
-            if (errno == EAGAIN || errno == EINTR)
+            if (errno == EAGAIN)
                 return PTY_READ_OK;
+            if (errno == EINTR)
+                continue; // retry the read
+            // On Linux, the slave closing often produces EIO rather
+            // than a clean EOF (read returning 0).  Treat it the same.
+            if (errno == EIO)
+                return PTY_READ_EOF;
             perror("pty read");
             return PTY_READ_ERROR;
         }
