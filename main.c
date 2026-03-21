@@ -79,7 +79,11 @@ static int pty_spawn(pid_t *child_out, uint16_t cols, uint16_t rows)
     // Parent — make the master fd non-blocking so read() returns EAGAIN
     // instead of blocking when there's no data, letting us poll each frame.
     int flags = fcntl(pty_fd, F_GETFL);
-    fcntl(pty_fd, F_SETFL, flags | O_NONBLOCK);
+    if (flags < 0 || fcntl(pty_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        perror("fcntl O_NONBLOCK");
+        close(pty_fd);
+        return -1;
+    }
 
     *child_out = child;
     return pty_fd;
