@@ -1042,16 +1042,19 @@ int main(void)
             }
         }
 
+        // Handle scrollbar drag-to-scroll before mouse forwarding so
+        // clicks on the scrollbar region don't leak into terminal apps
+        // (e.g. vim, tmux) as spurious mouse events.
+        bool scrollbar_consumed = handle_scrollbar(terminal, render_state,
+                                                   &scrollbar_dragging);
+
         // Forward keyboard/mouse input only while the child is alive.
         if (!child_exited) {
             handle_input(pty_fd, key_encoder, key_event, terminal);
-            handle_mouse(pty_fd, mouse_encoder, mouse_event, terminal,
-                         cell_width, cell_height, pad);
+            if (!scrollbar_consumed)
+                handle_mouse(pty_fd, mouse_encoder, mouse_event, terminal,
+                             cell_width, cell_height, pad);
         }
-
-        // Handle scrollbar drag-to-scroll before snapshotting so the
-        // render state reflects any scroll position changes this frame.
-        handle_scrollbar(terminal, render_state, &scrollbar_dragging);
 
         // Snapshot the terminal state into our render state.  This is the
         // only point where we need access to the terminal; after this the
