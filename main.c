@@ -643,15 +643,6 @@ static void render_terminal(GhosttyRenderState render_state,
     if (ghostty_render_state_colors_get(render_state, &colors) != GHOSTTY_SUCCESS)
         return;
 
-    // The bare terminal has no config, so the default fg/bg may both be
-    // (0,0,0).  Fall back to standard terminal defaults (white on black)
-    // so text is actually visible.
-    // https://github.com/ghostty-org/ghostty/issues/11704
-    if (colors.foreground.r == 0 && colors.foreground.g == 0 && colors.foreground.b == 0 &&
-        colors.background.r == 0 && colors.background.g == 0 && colors.background.b == 0) {
-        colors.foreground = (GhosttyColorRgb){ 255, 255, 255 };
-    }
-
     // Populate the row iterator from the current render state snapshot.
     if (ghostty_render_state_get(render_state,
             GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &row_iter) != GHOSTTY_SUCCESS)
