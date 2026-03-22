@@ -398,20 +398,7 @@ static void handle_mouse(int pty_fd, GhosttyMouseEncoder encoder,
         // Check whether any mouse tracking mode is enabled.  If so,
         // the application wants to handle scroll events itself.
         bool mouse_tracking = false;
-        bool mode_val = false;
-        const GhosttyMode tracking_modes[] = {
-            GHOSTTY_MODE_X10_MOUSE,
-            GHOSTTY_MODE_NORMAL_MOUSE,
-            GHOSTTY_MODE_BUTTON_MOUSE,
-            GHOSTTY_MODE_ANY_MOUSE,
-        };
-        for (size_t i = 0; i < sizeof(tracking_modes) / sizeof(tracking_modes[0]); i++) {
-            if (ghostty_terminal_mode_get(terminal, tracking_modes[i], &mode_val) == GHOSTTY_SUCCESS
-                && mode_val) {
-                mouse_tracking = true;
-                break;
-            }
-        }
+        ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_MOUSE_TRACKING, &mouse_tracking);
 
         if (mouse_tracking) {
             // Forward to the application via the mouse encoder.
