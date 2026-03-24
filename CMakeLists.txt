@@ -30,7 +30,7 @@ endif()
 # required Zig version.
 FetchContent_Declare(ghostty
   GIT_REPOSITORY https://github.com/ghostty-org/ghostty.git
-  GIT_TAG ecc55b94c803789762682065ab68f227447909c5
+  GIT_TAG 82f7527b302a655ed03be0f6f1f0d46f5aaadcb0
 )
 FetchContent_MakeAvailable(ghostty)
 
