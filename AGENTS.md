@@ -18,3 +18,4 @@
 
 - Update CMakeLists.txt first to point to the new version
 - Clean the build folder immediately to avoid stale libghostty builds
+- After cleaning, perform a rebuild to test for any API changes

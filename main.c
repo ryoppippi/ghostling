@@ -1184,7 +1184,8 @@ int main(void)
                 if (rows < 1) rows = 1;
                 term_cols = (uint16_t)cols;
                 term_rows = (uint16_t)rows;
-                ghostty_terminal_resize(terminal, term_cols, term_rows);
+                ghostty_terminal_resize(terminal, term_cols, term_rows,
+                                        (uint32_t)cell_width, (uint32_t)cell_height);
                 // Keep the effects context in sync so size queries
                 // report the current geometry.
                 effects_ctx.cols = term_cols;
