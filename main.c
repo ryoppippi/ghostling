@@ -1069,20 +1069,20 @@ int main(void)
         .rows = term_rows,
     };
     ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_USERDATA,
-        &(void *){ &effects_ctx });
+        &effects_ctx);
 
     ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_WRITE_PTY,
-        &(GhosttyTerminalWritePtyFn){ effect_write_pty });
+        (const void *)effect_write_pty);
     ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SIZE,
-        &(GhosttyTerminalSizeFn){ effect_size });
+        (const void *)effect_size);
     ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_DEVICE_ATTRIBUTES,
-        &(GhosttyTerminalDeviceAttributesFn){ effect_device_attributes });
+        (const void *)effect_device_attributes);
     ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_XTVERSION,
-        &(GhosttyTerminalXtversionFn){ effect_xtversion });
+        (const void *)effect_xtversion);
     ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_TITLE_CHANGED,
-        &(GhosttyTerminalTitleChangedFn){ effect_title_changed });
+        (const void *)effect_title_changed);
     ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_COLOR_SCHEME,
-        &(GhosttyTerminalColorSchemeFn){ effect_color_scheme });
+        (const void *)effect_color_scheme);
 
     // Create the key encoder and a reusable key event for input handling.
     // The encoder translates key events into the correct VT escape
