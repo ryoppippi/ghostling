@@ -133,6 +133,48 @@ After the initial configuration, you only need to run the build step:
 cmake --build build
 ```
 
+## Building with Nix
+
+If you have [Nix](https://nixos.org/) installed, you can build and run Ghostling without manually installing dependencies.
+
+### Quick start (without cloning)
+
+Try Ghostling directly from the repository:
+
+```sh
+nix run github:ghostty-org/ghostling
+```
+
+### Build
+
+Build the project from a cloned repository:
+
+```sh
+nix build
+./result/bin/ghostling
+```
+
+### Run after building
+
+After building with `nix build`, run the resulting binary:
+
+```sh
+./result/bin/ghostling
+```
+
+### Development
+
+Enter a development shell with all build dependencies:
+
+```sh
+nix develop
+cmake -B build -G Ninja
+cmake --build build
+./build/ghostling
+```
+
+The Nix package uses [flake.nix](./flake.nix) to manage dependencies and handle platform-specific build requirements (such as Xcode wrappers on macOS for Zig's SDK detection).
+
 ## FAQ
 
 ### Why Not Zig?
