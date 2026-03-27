@@ -641,6 +641,7 @@ static bool handle_scrollbar(GhosttyTerminal terminal,
 // cell_width and cell_height are the measured dimensions of a single
 // monospace glyph at the current font size, in screen (logical) pixels.
 // font_size is the logical font size (before DPI scaling).
+// pad is the pixel margin between the window edges and the terminal grid.
 //
 // If scrollbar is non-NULL, a scrollbar indicator is drawn on the right
 // edge of the window.
@@ -650,6 +651,7 @@ static void render_terminal(GhosttyRenderState render_state,
                             Font font,
                             int cell_width, int cell_height,
                             int font_size,
+                            int pad,
                             const GhosttyTerminalScrollbar *scrollbar)
 {
     // Grab colors (palette, default fg/bg) from the render state so we
@@ -664,7 +666,6 @@ static void render_terminal(GhosttyRenderState render_state,
         return;
 
     // Small padding from the window edges.
-    const int pad = 4;
     int y = pad;
 
     while (ghostty_render_state_row_iterator_next(row_iter)) {
@@ -1015,8 +1016,8 @@ int main(void)
     if (cell_width < 1) cell_width = 1;
     if (cell_height < 1) cell_height = 1;
 
-    // Small padding from window edges — must match the constant in
-    // render_terminal().
+    // Small padding from window edges, in pixels.  Passed to render_terminal()
+    // and handle_mouse() so all layout uses a single value.
     const int pad = 4;
 
     // Compute the initial grid from the window size and measured cell
@@ -1287,7 +1288,7 @@ int main(void)
         BeginDrawing();
         ClearBackground(win_bg);
         render_terminal(render_state, row_iter, row_cells, mono_font,
-                        cell_width, cell_height, font_size,
+                        cell_width, cell_height, font_size, pad,
                         scrollbar_ptr);
 
         // Show a banner when the child process has exited so the user
